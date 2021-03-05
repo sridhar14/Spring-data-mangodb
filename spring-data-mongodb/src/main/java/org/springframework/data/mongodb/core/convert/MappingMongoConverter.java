@@ -62,6 +62,7 @@ import org.springframework.data.mapping.model.SpELExpressionEvaluator;
 import org.springframework.data.mapping.model.SpELExpressionParameterValueProvider;
 import org.springframework.data.mongodb.CodecRegistryProvider;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
+import org.springframework.data.mongodb.core.mapping.ManualReference;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentEntity;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentProperty;
 import org.springframework.data.mongodb.core.mapping.ObjectReference;
@@ -72,9 +73,18 @@ import org.springframework.data.mongodb.core.mapping.event.AfterConvertEvent;
 import org.springframework.data.mongodb.core.mapping.event.AfterLoadEvent;
 import org.springframework.data.mongodb.core.mapping.event.MongoMappingEvent;
 import org.springframework.data.mongodb.util.BsonUtils;
+import org.springframework.data.mongodb.util.json.ParameterBindingContext;
+import org.springframework.data.mongodb.util.json.ParameterBindingDocumentCodec;
+import org.springframework.data.mongodb.util.json.ValueProvider;
 import org.springframework.data.util.ClassTypeInformation;
 import org.springframework.data.util.TypeInformation;
-import org.springframework.expression.Expression;
+import org.springframework.expression.AccessException;
+import org.springframework.expression.EvaluationContext;
+import org.springframework.expression.PropertyAccessor;
+import org.springframework.expression.TypedValue;
+import org.springframework.expression.spel.support.SimpleEvaluationContext;
+import org.springframework.expression.spel.support.SimpleEvaluationContext.Builder;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
@@ -142,7 +152,6 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 		this.typeMapper = new DefaultMongoTypeMapper(DefaultMongoTypeMapper.DEFAULT_TYPE_KEY, mappingContext,
 				this::getWriteTarget);
 		this.idMapper = new QueryMapper(this);
-
 
 		this.spELContext = new SpELContext(DocumentPropertyAccessor.INSTANCE);
 		this.dbRefProxyHandler = new DefaultDbRefProxyHandler(spELContext, mappingContext,
@@ -378,8 +387,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 	}
 
 	private <S> S populateProperties(ConversionContext context, MongoPersistentEntity<S> entity,
-			DocumentAccessor documentAccessor,
-			SpELExpressionEvaluator evaluator, S instance) {
+			DocumentAccessor documentAccessor, SpELExpressionEvaluator evaluator, S instance) {
 
 		PersistentPropertyAccessor<S> accessor = new ConvertingPropertyAccessor<>(entity.getPropertyAccessor(instance),
 				conversionService);
@@ -425,8 +433,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 
 	@Nullable
 	private Object readIdValue(ConversionContext context, SpELExpressionEvaluator evaluator,
-			MongoPersistentProperty idProperty,
-			Object rawId) {
+			MongoPersistentProperty idProperty, Object rawId) {
 
 		String expression = idProperty.getSpelExpression();
 		Object resolvedValue = expression != null ? evaluator.evaluate(expression) : rawId;
@@ -436,8 +443,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 
 	private void readProperties(ConversionContext context, MongoPersistentEntity<?> entity,
 			PersistentPropertyAccessor<?> accessor, DocumentAccessor documentAccessor,
-			MongoDbPropertyValueProvider valueProvider,
-			SpELExpressionEvaluator evaluator) {
+			MongoDbPropertyValueProvider valueProvider, SpELExpressionEvaluator evaluator) {
 
 		DbRefResolverCallback callback = null;
 
@@ -501,12 +507,36 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 			return;
 		}
 
-		if(property.isAnnotationPresent(ManualReference.class)) {
-			String lookup = property.getRequiredAnnotation(ManualReference.class).lookup();
-			Expression expression = spELContext.getParser().parseExpression(lookup);
-			Object lookupQuery = expression.getValue(value);
-			System.out.println("lookupQuery: " + lookupQuery);
+		if (property.isAnnotationPresent(ManualReference.class)) {
 
+			String lookup = property.getRequiredAnnotation(ManualReference.class).lookup();
+			ParameterBindingContext bindingContext = new ParameterBindingContext(new ValueProvider() {
+				@Nullable
+				@Override
+				public Object getBindableValue(int index) {
+					return null;
+				}
+			}, spELContext.getParser(), () -> {
+
+//				Object val = documentAccessor.get(property);
+//				if(val instanceof Document) {
+//					return spELContext.getEvaluationContext(val);
+//				}
+
+				return spELContext.getEvaluationContext(documentAccessor.getDocument());
+			});
+
+
+			ParameterBindingDocumentCodec codec = new ParameterBindingDocumentCodec();
+			Document decoded = codec.decode(lookup, bindingContext);
+
+			Document target = dbRefResolver.fetch(decoded);
+			;
+			accessor.setProperty(property, read(property.getTypeInformation(), target));
+			return;
+//			System.out.println("decoded: " + decoded);
+			// codec.decode(lookup, ParameterBindingContext.forExpressions(value, spELContext.getParser(),
+			// documentAccessor.getDocument())
 		}
 
 		DBRef dbref = value instanceof DBRef ? (DBRef) value : null;
@@ -735,7 +765,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 			return;
 		}
 
-		if(prop.isAssociation() && conversionService.canConvert(valueType.getType(), ObjectReference.class)) {
+		if (prop.isAssociation() && conversionService.canConvert(valueType.getType(), ObjectReference.class)) {
 			accessor.put(prop, conversionService.convert(obj, ObjectReference.class).getPointer());
 			return;
 		}
@@ -1462,8 +1492,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 			T target = null;
 			if (document != null) {
 
-				maybeEmitEvent(
-						new AfterLoadEvent<>(document, (Class<T>) type.getType(), collectionName));
+				maybeEmitEvent(new AfterLoadEvent<>(document, (Class<T>) type.getType(), collectionName));
 				target = (T) readDocument(context, document, type);
 			}
 
