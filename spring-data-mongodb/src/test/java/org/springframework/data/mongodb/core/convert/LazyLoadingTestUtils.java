@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 import org.springframework.aop.framework.Advised;
 import org.springframework.cglib.proxy.Factory;
 import org.springframework.data.mongodb.core.convert.DefaultDbRefResolver.LazyLoadingInterceptor;
-import org.springframework.data.mongodb.core.mapping.Embedded.Nullable;
+import org.springframework.data.mongodb.core.mapping.Unwrapped;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -77,7 +77,7 @@ public class LazyLoadingTestUtils {
 			return (boolean) ReflectionTestUtils.getField(interceptor, "resolved");
 		}
 
-		@Nullable
+		@Unwrapped.Nullable
 		public Object currentValue() {
 			return ReflectionTestUtils.getField(interceptor, "result");
 		}
