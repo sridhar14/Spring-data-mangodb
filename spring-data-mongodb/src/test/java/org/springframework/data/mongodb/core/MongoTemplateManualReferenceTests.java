@@ -1,21 +1,5 @@
 /*
- * Copyright 2021. the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/*
- * Copyright 2017-2021 the original author or authors.
+ * Copyright 2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +22,7 @@ import static org.springframework.data.mongodb.core.query.Query.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -268,23 +253,27 @@ public class MongoTemplateManualReferenceTests {
 
 		String rootCollectionName = template.getCollectionName(CollectionRefRoot.class);
 		String refCollectionName = "object-ref-of-document-with-embedded-collection-name";
-		org.bson.Document refSource = new Document("_id", "ref-1").append("value", "me-the-referenced-object");
+		org.bson.Document refSource1 = new Document("_id", "ref-1").append("value", "me-the-1-referenced-object");
+		org.bson.Document refSource2 = new Document("_id", "ref-2").append("value", "me-the-2-referenced-object");
 		org.bson.Document source = new Document("_id", "id-1").append("value", "v1").append(
 				"objectValueRefWithEmbeddedCollectionName",
-				Collections.singletonList(
+				Arrays.asList(
 						new Document("id", "ref-1").append("collection", "object-ref-of-document-with-embedded-collection-name")
-								.append("property", "without-any-meaning")));
+								.append("property", "without-any-meaning"),
+						new Document("id", "ref-2").append("collection", "object-ref-of-document-with-embedded-collection-name")
+						));
 
 		template.execute(db -> {
 
-			db.getCollection(refCollectionName).insertOne(refSource);
+			db.getCollection(refCollectionName).insertOne(refSource1);
+			db.getCollection(refCollectionName).insertOne(refSource2);
 			db.getCollection(rootCollectionName).insertOne(source);
 			return null;
 		});
 
 		CollectionRefRoot result = template.findOne(query(where("id").is("id-1")), CollectionRefRoot.class);
 		assertThat(result.getObjectValueRefWithEmbeddedCollectionName())
-				.containsExactly(new ObjectRefOfDocumentWithEmbeddedCollectionName("ref-1", "me-the-referenced-object"));
+				.containsExactly(new ObjectRefOfDocumentWithEmbeddedCollectionName("ref-1", "me-the-1-referenced-object"), new ObjectRefOfDocumentWithEmbeddedCollectionName("ref-2", "me-the-2-referenced-object"));
 	}
 
 	@Test

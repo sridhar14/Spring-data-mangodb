@@ -20,6 +20,7 @@ import static org.springframework.data.mongodb.core.query.Query.*;
 
 import org.bson.conversions.Bson;
 import org.springframework.data.mongodb.core.convert.ReferenceLoader;
+import org.springframework.data.mongodb.core.convert.ReferenceReader;
 import org.springframework.data.util.Streamable;
 import org.springframework.lang.Nullable;
 import reactor.core.publisher.Flux;
@@ -104,7 +105,7 @@ public class ReactivePerformanceTests {
 
 			@Nullable
 			@Override
-			public Object resolveReference(MongoPersistentProperty property, Object source, BiFunction<ReferenceContext, Bson, Streamable<Document>> lookupFunction) {
+			public Object resolveReference(MongoPersistentProperty property, Object source, ReferenceReader referenceReader, BiFunction<ReferenceContext, Bson, Streamable<Document>> lookupFunction) {
 				return null;
 			}
 

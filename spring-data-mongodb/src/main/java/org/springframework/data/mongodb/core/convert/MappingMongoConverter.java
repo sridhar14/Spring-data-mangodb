@@ -62,7 +62,6 @@ import org.springframework.data.mapping.model.SpELExpressionEvaluator;
 import org.springframework.data.mapping.model.SpELExpressionParameterValueProvider;
 import org.springframework.data.mongodb.CodecRegistryProvider;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
-import org.springframework.data.mongodb.core.convert.ReferenceResolver.ReferenceContext;
 import org.springframework.data.mongodb.core.mapping.ManualReference;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentEntity;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentProperty;
@@ -153,7 +152,9 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 					ConversionContext context = getConversionContext(path);
 					return MappingMongoConverter.this.getValueInternal(context, prop, bson, evaluator);
 				});
-		this.referenceReader = new ReferenceReader(mappingContext, (prop, document) -> this.read(prop.getActualType(), document), () -> spELContext);
+
+		this.referenceReader = new ReferenceReader(mappingContext,
+				(prop, document) -> this.read(prop.getActualType(), document), () -> spELContext);
 	}
 
 	/**
@@ -503,16 +504,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 
 		if (property.isAnnotationPresent(ManualReference.class)) {
 
-			DefaultReferenceResolver referenceResolver = new DefaultReferenceResolver(referenceReader);
-			accessor.setProperty(property, referenceResolver.resolveReference(property, value, (ctx, filter) -> {
-				return dbRefResolver.getReferenceLoader().bulkFetch(filter, ctx);
-			}));
-
-//			Object targetValue = referenceReader.readReference(property, value, (ctx, filter) -> {
-//				return dbRefResolver.getReferenceLoader().bulkFetch(filter, ctx);
-//			});
-//
-//			accessor.setProperty(property, targetValue);
+			accessor.setProperty(property, dbRefResolver.resolveReference(property, value, referenceReader));
 			return;
 		}
 
@@ -522,8 +514,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 
 	@Nullable
 	private Object readUnwrapped(ConversionContext context, DocumentAccessor documentAccessor,
-			MongoPersistentProperty prop,
-			MongoPersistentEntity<?> unwrappedEntity) {
+			MongoPersistentProperty prop, MongoPersistentEntity<?> unwrappedEntity) {
 
 		if (prop.findAnnotation(Unwrapped.class).onEmpty().equals(OnEmpty.USE_EMPTY)) {
 			return read(context, unwrappedEntity, (Document) documentAccessor.getDocument());
@@ -744,11 +735,12 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 
 		if (prop.isAssociation()) {
 
-			if(conversionService.canConvert(valueType.getType(), ObjectReference.class)) {
+			if (conversionService.canConvert(valueType.getType(), ObjectReference.class)) {
 				accessor.put(prop, conversionService.convert(obj, ObjectReference.class).getPointer());
 			} else {
 				// just take the id as a reference
-				accessor.put(prop, mappingContext.getPersistentEntity(prop.getAssociationTargetType()).getIdentifierAccessor(obj).getIdentifier());
+				accessor.put(prop, mappingContext.getPersistentEntity(prop.getAssociationTargetType())
+						.getIdentifierAccessor(obj).getIdentifier());
 			}
 			return;
 		}

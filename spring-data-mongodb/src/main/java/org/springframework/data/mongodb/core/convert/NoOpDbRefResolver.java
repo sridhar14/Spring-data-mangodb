@@ -75,7 +75,7 @@ public enum NoOpDbRefResolver implements DbRefResolver {
 
 	@Nullable
 	@Override
-	public Object resolveReference(MongoPersistentProperty property, Object source, BiFunction<ReferenceContext, Bson, Streamable<Document>> lookupFunction) {
+	public Object resolveReference(MongoPersistentProperty property, Object source, ReferenceReader referenceReader, BiFunction<ReferenceContext, Bson, Streamable<Document>> lookupFunction) {
 		return null;
 	}
 

@@ -70,14 +70,13 @@ import com.mongodb.client.model.Filters;
  * @author Mark Paluch
  * @since 1.4
  */
-public class DefaultDbRefResolver implements DbRefResolver, ReferenceResolver {
+public class DefaultDbRefResolver extends DefaultReferenceResolver implements DbRefResolver, ReferenceResolver {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(DefaultDbRefResolver.class);
 
 	private final MongoDatabaseFactory mongoDbFactory;
 	private final PersistenceExceptionTranslator exceptionTranslator;
 	private final ObjenesisStd objenesis;
-	private final ReferenceLoader referenceLoader;
 
 	/**
 	 * Creates a new {@link DefaultDbRefResolver} with the given {@link MongoDatabaseFactory}.
@@ -86,10 +85,11 @@ public class DefaultDbRefResolver implements DbRefResolver, ReferenceResolver {
 	 */
 	public DefaultDbRefResolver(MongoDatabaseFactory mongoDbFactory) {
 
+		super(new DefaultReferenceLoader(mongoDbFactory));
+
 		Assert.notNull(mongoDbFactory, "MongoDbFactory translator must not be null!");
 
 		this.mongoDbFactory = mongoDbFactory;
-		this.referenceLoader = new DefaultReferenceLoader(mongoDbFactory);
 		this.exceptionTranslator = mongoDbFactory.getExceptionTranslator();
 		this.objenesis = new ObjenesisStd(true);
 	}
@@ -113,21 +113,13 @@ public class DefaultDbRefResolver implements DbRefResolver, ReferenceResolver {
 		return callback.resolve(property);
 	}
 
-	@Nullable
-	@Override
-	public Object resolveReference(MongoPersistentProperty property, Object source, BiFunction<ReferenceContext, Bson, Streamable<Document>> lookupFunction) {
-
-
-		return null;
-	}
-
 	/*
 	 * (non-Javadoc)
 	 * @see org.springframework.data.mongodb.core.convert.DbRefResolver#fetch(com.mongodb.DBRef)
 	 */
 	@Override
 	public Document fetch(DBRef dbRef) {
-		return referenceLoader.fetch(Filters.eq("_id", dbRef.getId()), ReferenceContext.fromDBRef(dbRef));
+		return getReferenceLoader().fetch(Filters.eq("_id", dbRef.getId()), ReferenceContext.fromDBRef(dbRef));
 	}
 
 	/*
@@ -167,7 +159,7 @@ public class DefaultDbRefResolver implements DbRefResolver, ReferenceResolver {
 					databaseSource.getCollectionName());
 		}
 
-		List<Document> result = referenceLoader
+		List<Document> result = getReferenceLoader()
 				.bulkFetch(new Document("_id", new Document("$in", ids)), ReferenceContext.fromDBRef(refs.iterator().next()))
 				.toList();
 
@@ -250,10 +242,6 @@ public class DefaultDbRefResolver implements DbRefResolver, ReferenceResolver {
 		return documents.stream() //
 				.filter(it -> it.get("_id").equals(identifier)) //
 				.limit(1);
-	}
-
-	public ReferenceLoader getReferenceLoader() {
-		return referenceLoader;
 	}
 
 	/**
