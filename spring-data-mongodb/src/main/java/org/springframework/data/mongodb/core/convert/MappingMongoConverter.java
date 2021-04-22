@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.bson.Document;
 import org.bson.codecs.Codec;
@@ -496,7 +497,7 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 			DocumentAccessor documentAccessor, DbRefProxyHandler handler, DbRefResolverCallback callback) {
 
 		MongoPersistentProperty property = association.getInverse();
-		Object value = documentAccessor.get(property);
+		final Object value = documentAccessor.get(property);
 
 		if (value == null) {
 			return;
@@ -504,7 +505,20 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 
 		if (property.isAnnotationPresent(ManualReference.class)) {
 
-			accessor.setProperty(property, dbRefResolver.resolveReference(property, value, referenceReader));
+			// quite unusual but sounds like worth having?
+
+			if (conversionService.canConvert(ObjectReference.class, property.getActualType())) {
+
+				// collection like special treatment
+				accessor.setProperty(property, conversionService.convert(new ObjectReference() {
+					@Override
+					public Object getPointer() {
+						return value;
+					}
+				}, property.getActualType()));
+			} else {
+				accessor.setProperty(property, dbRefResolver.resolveReference(property, value, referenceReader));
+			}
 			return;
 		}
 
@@ -782,6 +796,18 @@ public class MappingMongoConverter extends AbstractMongoConverter implements App
 	protected List<Object> createCollection(Collection<?> collection, MongoPersistentProperty property) {
 
 		if (!property.isDbReference()) {
+
+			if (property.isAssociation()) {
+				return writeCollectionInternal(collection.stream().map(it -> {
+					if (conversionService.canConvert(it.getClass(), ObjectReference.class)) {
+						return conversionService.convert(it, ObjectReference.class).getPointer();
+					} else {
+						// just take the id as a reference
+						return mappingContext.getPersistentEntity(property.getAssociationTargetType()).getIdentifierAccessor(it)
+								.getIdentifier();
+					}
+				}).collect(Collectors.toList()), ClassTypeInformation.from(ObjectReference.class), new BasicDBList());
+			}
 
 			if (property.hasExplicitWriteTarget()) {
 				return writeCollectionInternal(collection, new FieldTypeInformation<>(property), new ArrayList<>());
