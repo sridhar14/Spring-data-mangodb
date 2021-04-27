@@ -29,7 +29,7 @@
 		<springdata.commons>2.6.0-SNAPSHOT</springdata.commons>
 		<mongo>4.2.3</mongo>
 		<mongo.reactivestreams>${mongo}</mongo.reactivestreams>
-		<jmh.version>1.19</jmh.version>
+		<jmh.version>1.29</jmh.version>
 	</properties>
 
 	<developers>
